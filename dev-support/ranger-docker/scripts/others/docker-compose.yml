@@ -1,0 +1,66 @@
+version: "3.7"
+services:
+  elasticsearch:
+    image: elasticsearch:8.5.3
+    container_name: ranger-es
+    hostname: es01
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+    ports:
+      - 9200:9200
+    networks:
+      - cdwranger
+    volumes:
+    - ranger-es:/usr/share/elasticsearch/data
+  postgresql:
+    image: postgres:13
+    container_name: ranger-db
+    hostname: pgdb01
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+    ports:
+      - 5432:5432
+    networks:
+      - cdwranger
+    volumes:
+    - ranger-db:/var/lib/postgresql/data
+  ranger-admin:
+    image: dailyway/ranger-admin
+    container_name: ranger-admin
+    hostname: ranger-admin
+    #entrypoint: /root/docker-entrypoint.sh
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 6G
+        reservations:
+          cpus: '1'
+          memory: 4G
+    ports:
+      - 6080:6080
+    networks:
+      - cdwranger
+    volumes:
+      - ./admin/install.properties:/root/install.properties
+      - ./ranger-admin/docker-entrypoint.sh:/root/docker-entrypoint.sh
+  trino:
+    image: trinodb/trino:384
+    hostname: trino01
+    user: root
+    container_name: trino
+    entrypoint: /root/docker-entrypoint.sh
+    networks:
+      - cdwranger
+    volumes:
+      - ./trino/install.properties:/root/install.properties
+      - ./trino/docker-entrypoint.sh:/root/docker-entrypoint.sh
+    ports:
+      - 8080:8080
+networks:
+  cdwranger:
+    driver: bridge
+volumes:
+  ranger-es:
+  ranger-db:
