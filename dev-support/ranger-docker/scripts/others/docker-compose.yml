@@ -1,30 +1,42 @@
 version: "3.7"
 services:
+  db:
+    image: postgres:13
+    volumes:
+      - ranger-db:/var/lib/postgresql/data
+    restart: always
+    container_name: ranger-db
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+    expose:
+      - "5432"
   elasticsearch:
     image: elasticsearch:8.5.3
     container_name: ranger-es
     hostname: es01
     environment:
-      discovery.type: single-node
-      xpack.security.enabled: "false"
+      - discovery.type=single-node
+      - "ELASTIC_PASSWORD=elasticsearch"
+      - xpack.security.enabled: "false"
     ports:
       - 9200:9200
     networks:
       - cdwranger
     volumes:
     - ranger-es:/usr/share/elasticsearch/data
-  postgresql:
-    image: postgres:13
-    container_name: ranger-db
-    hostname: pgdb01
-    environment:
-      POSTGRES_PASSWORD: "postgres"
-    ports:
-      - 5432:5432
-    networks:
-      - cdwranger
+   ranger-admin:
+    image: dailyway/ranger-admin:2.3.0
+    container_name: ranger-admin
+    hostname: ranger-admin
+    depends_on:
+      - db
     volumes:
-    - ranger-db:/var/lib/postgresql/data
+      - ./admin/bootstrap.sh:/opt/ranger_admin/bootstrap.sh
+      - ./admin/install.properties:/opt/ranger_admin/install.properties
+    command: ["./bootstrap.sh"]
+    ports:
+      - "6080:6080"
+    restart: always
   ranger-admin:
     image: dailyway/ranger-admin
     container_name: ranger-admin
@@ -45,22 +57,51 @@ services:
     volumes:
       - ./admin/install.properties:/root/install.properties
       - ./ranger-admin/docker-entrypoint.sh:/root/docker-entrypoint.sh
-  trino:
-    image: trinodb/trino:384
-    hostname: trino01
-    user: root
-    container_name: trino
-    entrypoint: /root/docker-entrypoint.sh
-    networks:
-      - cdwranger
+  
+  ranger-usersync:
+    image: kadensungbincho/ranger-usersync:2.1.0
+    container_name: ranger-usersync
+    hostname: usersync
+    depends_on:
+      - ranger-admin
     volumes:
-      - ./trino/install.properties:/root/install.properties
-      - ./trino/docker-entrypoint.sh:/root/docker-entrypoint.sh
-    ports:
-      - 8080:8080
-networks:
-  cdwranger:
-    driver: bridge
+      - ./usersync/bootstrap.sh:/opt/ranger_usersync/bootstrap.sh
+      - ./usersync/install.properties:/opt/ranger_usersync/install.properties
+    command: ["./bootstrap.sh"]
+    restart: always
+  #  ranger-usersync-ldap:
+  #    image: kadensungbincho/ranger-usersync:2.1.0
+  #    container_name: ranger2.0.0-usersync-ldap
+  #    hostname: usersync-ldap
+  #    depends_on:
+  #      - ranger-admin
+  #    volumes:
+  #      - ./usersync/bootstrap-ldap.sh:/opt/ranger_usersync/bootstrap.sh
+  #      - ./usersync/install-ldap.properties:/opt/ranger_usersync/install-hdfs.properties
+  #      - ./usersync/templates:/templates
+  #      - ./usersync/conf.dist/log4j.properties:/opt/ranger_usersync/conf.dist/log4j.properties
+  #    command: ["./bootstrap.sh"]
+
+#  trino:
+#    image: trinodb/trino:384
+#    hostname: trino01
+#    user: root
+#    container_name: trino
+#    entrypoint: /root/docker-entrypoint.sh
+#    networks:
+#      - cdwranger
+#    volumes:
+#      - ./trino/install.properties:/root/install.properties
+#      - ./trino/docker-entrypoint.sh:/root/docker-entrypoint.sh
+#    ports:
+#      - 8080:8080
+
 volumes:
-  ranger-es:
   ranger-db:
+    driver: local
+  ranger-es:
+    driver: local
+networks:
+  default:
+    external:
+      name: cdwramger
